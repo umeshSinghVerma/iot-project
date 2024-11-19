@@ -5,8 +5,8 @@ from hand_gesture_recognizer import GestureRecognizer
 gesture_actions = {
     "fist": "down",
     "open_palm": "up",
-    "left_swipe": "left",  # Click left mouse button
-    "right_swipe": "right",  # Click right mouse button
+    "two_fingers": "left",  # Click left mouse button
+    "three_fingers": "right",  # Click right mouse button
 }
 
 # Track the current state of each gesture (active or not)
@@ -16,7 +16,7 @@ active_gestures = set()
 def handle_gesture_state(gesture_name, state):
     """
     Handle the state of gestures and map to keyboard or mouse actions.
-    :param gesture_name: Name of the gesture (e.g., 'fist', 'open_palm', 'left_swipe').
+    :param gesture_name: Name of the gesture (e.g., 'fist', 'open_palm', 'two_fingers').
     :param state: State of the gesture ('appear', 'disappear').
     """
     action = gesture_actions.get(gesture_name)
@@ -47,11 +47,11 @@ def handle_open_palm(state):
 
 
 def handle_left_swipe(state):
-    handle_gesture_state("left_swipe", state)
+    handle_gesture_state("two_fingers", state)
 
 
 def handle_right_swipe(state):
-    handle_gesture_state("right_swipe", state)
+    handle_gesture_state("three_fingers", state)
 
 
 # Initialize the recognizer
@@ -60,8 +60,8 @@ recognizer = GestureRecognizer()
 # Register gestures and their handlers
 recognizer.register_gesture("fist", handle_fist)
 recognizer.register_gesture("open_palm", handle_open_palm)
-recognizer.register_gesture("left_swipe", handle_left_swipe)
-recognizer.register_gesture("right_swipe", handle_right_swipe)
+recognizer.register_gesture("two_fingers", handle_left_swipe)
+recognizer.register_gesture("three_fingers", handle_right_swipe)
 
 # Run the recognizer
 recognizer.run()
