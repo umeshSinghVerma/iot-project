@@ -9,6 +9,7 @@ mp_hands = mp.solutions.hands
 class GestureRecognizer:
     def __init__(self):
         self.custom_functions = {}
+        self.previous_gestures = set()  # Track gestures from the previous frame
 
     def register_gesture(self, gesture_name, function):
         """
@@ -19,6 +20,11 @@ class GestureRecognizer:
         self.custom_functions[gesture_name] = function
 
     def detect_gesture(self, hand_landmarks):
+        """
+        Detect the current gesture based on hand landmarks.
+        :param hand_landmarks: Detected hand landmarks from MediaPipe
+        :return: Gesture name (e.g., 'fist', 'open_palm') or None
+        """
         fingers_extended = []
 
         # Thumb
@@ -57,6 +63,30 @@ class GestureRecognizer:
             return "two_fingers"
         return None
 
+    def handle_gesture_states(self, current_gestures):
+        """
+        Handle gesture state changes (appear, persist, disappear).
+        :param current_gestures: Set of gestures detected in the current frame
+        """
+        # Detect newly appeared gestures
+        new_gestures = current_gestures - self.previous_gestures
+
+        # Detect disappeared gestures
+        disappeared_gestures = self.previous_gestures - current_gestures
+
+        # Handle new gestures
+        for gesture in new_gestures:
+            if gesture in self.custom_functions:
+                self.custom_functions[gesture]("appear")
+
+        # Handle disappeared gestures
+        for gesture in disappeared_gestures:
+            if gesture in self.custom_functions:
+                self.custom_functions[gesture]("disappear")
+
+        # Update previous gestures
+        self.previous_gestures = current_gestures
+
     def run(self):
         cap = cv2.VideoCapture(0)
         with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
@@ -77,15 +107,15 @@ class GestureRecognizer:
 
                 # Initialize the hand mask
                 hand_mask = np.zeros_like(image)
+                current_gestures = set()  # Track gestures in the current frame
 
                 if results.multi_hand_landmarks:
                     for hand_landmarks in results.multi_hand_landmarks:
                         # Detect gesture
                         gesture = self.detect_gesture(hand_landmarks)
 
-                        # Call the corresponding custom function
-                        if gesture and gesture in self.custom_functions:
-                            self.custom_functions[gesture](image)
+                        if gesture:
+                            current_gestures.add(gesture)
 
                         # Draw landmarks on the mask
                         mp_drawing.draw_landmarks(
@@ -95,6 +125,9 @@ class GestureRecognizer:
                             mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=2),
                             mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=2),
                         )
+
+                # Handle gesture states
+                self.handle_gesture_states(current_gestures)
 
                 # Convert hand mask to grayscale
                 gray_hand_mask = cv2.cvtColor(hand_mask, cv2.COLOR_BGR2GRAY)
