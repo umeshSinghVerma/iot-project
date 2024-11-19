@@ -6,10 +6,14 @@ import numpy as np
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
+
 class GestureRecognizer:
     def __init__(self):
         self.custom_functions = {}
         self.previous_gestures = set()  # Track gestures from the previous frame
+        self.previous_positions = (
+            []
+        )  # Track hand positions across frames for swipe detection
 
     def register_gesture(self, gesture_name, function):
         """
@@ -42,7 +46,10 @@ class GestureRecognizer:
                 mp_hands.HandLandmark.MIDDLE_FINGER_TIP,
                 mp_hands.HandLandmark.MIDDLE_FINGER_PIP,
             ),
-            (mp_hands.HandLandmark.RING_FINGER_TIP, mp_hands.HandLandmark.RING_FINGER_PIP),
+            (
+                mp_hands.HandLandmark.RING_FINGER_TIP,
+                mp_hands.HandLandmark.RING_FINGER_PIP,
+            ),
             (mp_hands.HandLandmark.PINKY_TIP, mp_hands.HandLandmark.PINKY_PIP),
         ]:
             tip = hand_landmarks.landmark[finger_tip]
@@ -61,6 +68,36 @@ class GestureRecognizer:
             return "three_fingers"
         elif extended_count == 2:
             return "two_fingers"
+        return None
+
+    def detect_swipe(self, hand_landmarks):
+        """
+        Detect left or right swipes based on the motion of the hand landmarks.
+        :param hand_landmarks: Detected hand landmarks from MediaPipe
+        :return: 'left_swipe', 'right_swipe', or None
+        """
+        # Use the wrist position for swipe detection
+        wrist = hand_landmarks.landmark[mp_hands.HandLandmark.WRIST]
+        current_position = (wrist.x, wrist.y)
+
+        if self.previous_positions:
+            # Calculate motion direction
+            prev_position = self.previous_positions[-1]
+            dx = current_position[0] - prev_position[0]
+
+            # Determine swipe direction
+            if dx > 0.1:  # Adjust threshold for sensitivity
+                return "right_swipe"
+            elif dx < -0.1:
+                return "left_swipe"
+
+        # Store the current position for the next frame
+        self.previous_positions.append(current_position)
+
+        # Keep position history manageable
+        if len(self.previous_positions) > 5:  # Adjust buffer size if needed
+            self.previous_positions.pop(0)
+
         return None
 
     def handle_gesture_states(self, current_gestures):
@@ -89,7 +126,9 @@ class GestureRecognizer:
 
     def run(self):
         cap = cv2.VideoCapture(0)
-        with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
+        with mp_hands.Hands(
+            min_detection_confidence=0.5, min_tracking_confidence=0.5
+        ) as hands:
             while cap.isOpened():
                 success, image = cap.read()
                 if not success:
@@ -117,13 +156,22 @@ class GestureRecognizer:
                         if gesture:
                             current_gestures.add(gesture)
 
+                        # Detect swipes
+                        swipe = self.detect_swipe(hand_landmarks)
+                        if swipe:
+                            current_gestures.add(swipe)
+
                         # Draw landmarks on the mask
                         mp_drawing.draw_landmarks(
                             hand_mask,
                             hand_landmarks,
                             mp_hands.HAND_CONNECTIONS,
-                            mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=2),
-                            mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2, circle_radius=2),
+                            mp_drawing.DrawingSpec(
+                                color=(255, 255, 255), thickness=2, circle_radius=2
+                            ),
+                            mp_drawing.DrawingSpec(
+                                color=(255, 255, 255), thickness=2, circle_radius=2
+                            ),
                         )
 
                 # Handle gesture states
@@ -131,10 +179,14 @@ class GestureRecognizer:
 
                 # Convert hand mask to grayscale
                 gray_hand_mask = cv2.cvtColor(hand_mask, cv2.COLOR_BGR2GRAY)
-                _, binary_hand_mask = cv2.threshold(gray_hand_mask, 10, 255, cv2.THRESH_BINARY)
+                _, binary_hand_mask = cv2.threshold(
+                    gray_hand_mask, 10, 255, cv2.THRESH_BINARY
+                )
 
                 # Combine the original image and the mask for display
-                combined_view = np.hstack((image, cv2.cvtColor(binary_hand_mask, cv2.COLOR_GRAY2BGR)))
+                combined_view = np.hstack(
+                    (image, cv2.cvtColor(binary_hand_mask, cv2.COLOR_GRAY2BGR))
+                )
                 cv2.imshow("Hand Gesture Recognition and Mask", combined_view)
 
                 # Exit on pressing 'ESC'
